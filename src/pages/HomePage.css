@@ -10,16 +10,35 @@
   gap: var(--spacing-unit);
   padding: var(--spacing-unit);
   padding-left: 0;
-  padding-top: calc(var(--spacing-unit) * 4);
+  padding-top: calc(var(--spacing-unit) * 6);
   align-items: flex-start;
   flex-wrap: wrap;
   width: 100%;
+  /* expose search width so siblings can align to it */
+  --search-width: 500px;
 }
 
 .home-page__search {
-  flex: 0 1 500px;
+  flex: 0 1 var(--search-width);
   min-width: 350px;
   padding-left: calc(var(--spacing-unit) * 3);
+}
+
+.home-page__title {
+  display: flex;
+  align-items: center;
+  /* align left edge with start of filter bar (right of search) */
+  margin-left: calc(var(--search-width) + var(--spacing-unit));
+  /* move down slightly from top */
+  margin-top: calc(var(--spacing-unit) * 2.5);
+}
+
+.home-page__title h2 {
+  padding-top: 1rem;
+  padding-left: 2rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .home-page__filters {

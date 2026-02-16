@@ -12,6 +12,9 @@ export const getPopularMovies = (page: number) =>
 export const getNowPlayingMovies = (page: number) =>
   axiosInstance.get("/movie/now_playing", { params: { page } });
 
+export const getRecommendedMovies = (page = 1) =>
+  axiosInstance.get("/movie/top_rated", { params: { page } });
+
 export const getMovieDetails = (movieId: number) =>
   axiosInstance.get(`/movie/${movieId}`);
 

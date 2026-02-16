@@ -4,6 +4,7 @@ import { fetchMoviesRequest, clearError } from "../features/movies/moviesSlice";
 import MoviesGrid from "../components/ui/MoviesGrid";
 import FilterBar from "../components/ui/FilterBar";
 import Pagination from "../components/ui/Pagination";
+import Carousel from "../components/ui/Carousel/Carousel";
 import type { RootState } from "../store/store";
 import MoviesSearch from "../components/ui/MoviesSearch";
 import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
@@ -57,6 +58,12 @@ const HomePage = () => {
 
   return (
     <div className="home-page">
+      <div className="home-page__title">
+        <h2>Recommended For You</h2>
+      </div>
+
+      <Carousel />
+
       <div className="home-page__controls">
         <div className="home-page__search">
           <MoviesSearch />
