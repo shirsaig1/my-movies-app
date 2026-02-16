@@ -133,7 +133,9 @@ const MovieGrid = ({ movies }: Props) => {
       {movies.length === 0 ? (
         <div className="movies-grid__empty" role="status" aria-live="polite">
           <h3 className="movies-grid__empty-title">No movies found</h3>
-          <p className="movies-grid__empty-sub">Try adjusting your search or filters.</p>
+          <p className="movies-grid__empty-sub">
+            Try adjusting your search or filters.
+          </p>
         </div>
       ) : (
         movies.map((movie, index) => (

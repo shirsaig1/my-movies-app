@@ -18,8 +18,7 @@ export const getRecommendedMovies = (page = 1) =>
 export const getMovieDetails = (movieId: number) =>
   axiosInstance.get(`/movie/${movieId}`);
 
-export const getAccountDetails = () =>
-  axiosInstance.get("/account");
+export const getAccountDetails = () => axiosInstance.get("/account");
 
 // Favorites management with error handling
 export const getFavoriteMovies = (): Movie[] => {

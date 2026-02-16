@@ -75,8 +75,12 @@ const HomePage = () => {
   return (
     <div className="home-page">
       <div className="home-page__header">
-        <h1 className="home-page__header-title">{username ? `Welcome, ${username}.` : "Welcome."}</h1>
-        <p className="home-page__header-subtitle">Millions of popular and airing now movies to discover. Explore now.</p>
+        <h1 className="home-page__header-title">
+          {username ? `Welcome, ${username}.` : "Welcome."}
+        </h1>
+        <p className="home-page__header-subtitle">
+          Millions of popular and airing now movies to discover. Explore now.
+        </p>
       </div>
 
       <div className="home-page__title">
