@@ -1,3 +1,8 @@
+A modern movie browsing web application built with React, TypeScript, and Redux-Saga, powered by the TMDB API. The app allows users to explore popular and now-playing movies, search dynamically, and manage a personalized favorites list — all within a responsive and scalable architecture.
+
+Install dependencies
+Create environment file VITE_TMDB_BEARER_TOKEN=YOUR_TOKEN_HERE
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
