@@ -33,6 +33,11 @@ export default function Pagination() {
   }, [page]);
 
   useEffect(() => {
+    // Scroll to top of grid when page changes
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [page]);
+
+  useEffect(() => {
     const handlePaginationFocus = () => {
       setActiveComponent("pagination");
     };
