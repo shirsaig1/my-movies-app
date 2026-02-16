@@ -57,25 +57,33 @@ const HomePage = () => {
 
   return (
     <div className="home-page">
-      <MoviesSearch />
-      <FilterBar />
-
-      {error && (
-        <div className="alert alert-error home-page__error">
-          <div className="alert__content">
-            <p>{error}</p>
-            <button
-              onClick={() => dispatch(clearError())}
-              className="alert__close"
-            >
-              ✕
-            </button>
-          </div>
+      <div className="home-page__controls">
+        <div className="home-page__search">
+          <MoviesSearch />
         </div>
-      )}
+        <div className="home-page__filters">
+          <FilterBar />
+        </div>
+      </div>
 
-      <MoviesGrid movies={movies} />
-      <Pagination />
+      <div className="home-page__content">
+        {error && (
+          <div className="alert alert-error home-page__error">
+            <div className="alert__content">
+              <p>{error}</p>
+              <button
+                onClick={() => dispatch(clearError())}
+                className="alert__close"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        <MoviesGrid movies={movies} />
+        <Pagination />
+      </div>
     </div>
   );
 };
