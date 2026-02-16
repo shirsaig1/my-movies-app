@@ -45,11 +45,22 @@
   font-size: 1rem;
   font-weight: 500;
   transition: var(--transition);
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
 }
 
 .pagination__input:focus {
   outline: 3px solid var(--primary-color);
   outline-offset: 2px;
+}
+
+.pagination__input::placeholder {
+  color: var(--text-secondary);
+}
+
+.pagination__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .pagination__input--focused {

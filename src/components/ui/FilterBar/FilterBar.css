@@ -1,7 +1,7 @@
 .filter-bar {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  gap: 10px;
   justify-content: flex-start;
   padding: 0;
   flex-wrap: nowrap;
@@ -9,18 +9,33 @@
 }
 
 .filter-button {
-  padding: 8px 16px;
+  padding: 8px 12px;
   border: 1px solid var(--primary-color);
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease-in-out;
+  transition: all 0.18s ease-in-out;
   text-transform: none;
   white-space: nowrap;
-  min-width: 100px;
-  flex: 1;
-  text-align: center;
+  min-width: 120px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.filter-button__icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.filter-button__label {
+  display: inline-block;
 }
 
 .filter-button--outlined {
@@ -46,4 +61,9 @@
 .filter-button--focused {
   outline: 2px solid blue;
   outline-offset: 2px;
+}
+
+.filter-button--active .filter-button__icon svg {
+  stroke: white;
+  fill: white;
 }

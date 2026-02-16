@@ -126,17 +126,29 @@ const MovieGrid = ({ movies }: Props) => {
   );
 
   return (
-    <div className="movies-grid" ref={gridRef}>
-      {movies.map((movie, index) => (
-        <MovieCard
-          key={movie.id}
-          movie={movie}
-          ref={(el) => {
-            cardRefs.current[index] = el;
-          }}
-          isFocused={focusedIndex === index}
-        />
-      ))}
+    <div
+      className={`movies-grid ${movies.length === 0 ? "empty" : ""}`}
+      ref={gridRef}
+    >
+      {movies.length === 0 ? (
+        <div className="movies-grid__empty" role="status" aria-live="polite">
+          <h3 className="movies-grid__empty-title">No movies found</h3>
+          <p className="movies-grid__empty-sub">
+            Try adjusting your search or filters.
+          </p>
+        </div>
+      ) : (
+        movies.map((movie, index) => (
+          <MovieCard
+            key={movie.id}
+            movie={movie}
+            ref={(el) => {
+              cardRefs.current[index] = el;
+            }}
+            isFocused={focusedIndex === index}
+          />
+        ))
+      )}
     </div>
   );
 };
