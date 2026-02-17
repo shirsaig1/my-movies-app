@@ -24,11 +24,34 @@ const SEARCH_CONFIG = {
   MIN_LENGTH: 2,
 } as const;
 
+const CACHE_CONFIG = {
+  TTL_MS: 5 * 60 * 1000, // 5 minutes
+} as const;
+
 const API_ENDPOINTS = {
   POPULAR: "/movie/popular",
   NOW_PLAYING: "/movie/now_playing",
   SEARCH: "/search/movie",
 } as const;
+
+// Cache implementation
+interface CacheEntry {
+  data: Movie[];
+  timestamp: number;
+}
+const movieCache = new Map<string, CacheEntry>();
+
+function getCacheKey(
+  filter: string,
+  page: number,
+  searchQuery: string,
+): string {
+  return `${filter}_page${page}_search${searchQuery || ""}`;
+}
+
+function isCacheValid(entry: CacheEntry): boolean {
+  return Date.now() - entry.timestamp < CACHE_CONFIG.TTL_MS;
+}
 
 // Rate limiting implementation
 let requestTimestamps: number[] = [];
@@ -51,7 +74,7 @@ function isRequestAllowed(): boolean {
 function* fetchMovies(): Generator<unknown, void, unknown> {
   try {
     const state = yield select((state: RootState) => state.movies);
-    const { filter, page } = state as MoviesState;
+    const { filter, page, searchQuery } = state as MoviesState;
 
     // Handle favorites from localStorage
     if (filter === "favorites") {
@@ -60,23 +83,43 @@ function* fetchMovies(): Generator<unknown, void, unknown> {
       return;
     }
 
-    // Determine API endpoint based on filter
-    const endpoint =
-      filter === "now_playing"
-        ? API_ENDPOINTS.NOW_PLAYING
-        : API_ENDPOINTS.POPULAR;
+    const cacheKey = getCacheKey(filter, page, searchQuery);
+
+    // Check cache first
+    const cached = movieCache.get(cacheKey);
+    if (cached && isCacheValid(cached)) {
+      console.log(`[Cache HIT] ${cacheKey}`);
+      yield put(fetchMoviesSuccess(cached.data));
+      return;
+    }
+
+    console.log(`[Cache MISS/EXPIRED] ${cacheKey} - fetching from API`);
+
+    // Determine endpoint based on filter and search
+    let endpoint: string;
+    if (searchQuery) {
+      endpoint = API_ENDPOINTS.SEARCH;
+    } else if (filter === "now_playing") {
+      endpoint = API_ENDPOINTS.NOW_PLAYING;
+    } else {
+      endpoint = API_ENDPOINTS.POPULAR;
+    }
+
+    const params = searchQuery ? { query: searchQuery, page } : { page };
 
     const response = (yield call(() =>
-      axiosInstance.get(endpoint, { params: { page } }),
+      axiosInstance.get(endpoint, { params }),
     )) as { data?: { results?: unknown[] } };
 
-    // Validate response data structure
     const data = response as { data?: { results?: unknown[] } };
     const movies: Movie[] = data.data?.results as Movie[];
+
     if (!Array.isArray(movies)) {
       throw new TypeError("Invalid API response: results is not an array");
     }
 
+    // Cache the result
+    movieCache.set(cacheKey, { data: movies, timestamp: Date.now() });
     yield put(fetchMoviesSuccess(movies));
   } catch (error) {
     const errorMessage = getErrorMessage(error);
@@ -84,31 +127,29 @@ function* fetchMovies(): Generator<unknown, void, unknown> {
   }
 }
 
+// Handler for filter changes - always fetch with page 1
+function* handleFilterChange(): Generator<unknown, void, unknown> {
+  // Filter change should always trigger fetch
+  yield put(fetchMoviesRequest());
+}
+
+// Handler for page changes - fetch with current filter
+function* handlePageChange(): Generator<unknown, void, unknown> {
+  // Page change should always trigger fetch
+  yield put(fetchMoviesRequest());
+}
+
+// Handler for search changes - with race condition prevention
 function* handleSearch(action: {
   payload: string;
+  type: string;
 }): Generator<unknown, void, unknown> {
   try {
     const query = (action.payload ?? "").trim();
-    const state = yield select((state: RootState) => state.movies);
-    const { filter, page } = state as MoviesState;
 
-    // If search is cleared, fetch default content
+    // If search is cleared, fetch default content for current filter
     if (!query) {
-      const endpoint =
-        filter === "now_playing"
-          ? API_ENDPOINTS.NOW_PLAYING
-          : API_ENDPOINTS.POPULAR;
-
-      const response = (yield call(() =>
-        axiosInstance.get(endpoint, { params: { page } }),
-      )) as { data?: { results?: unknown[] } };
-
-      const movies: Movie[] = response.data?.results as Movie[];
-      if (!Array.isArray(movies)) {
-        throw new TypeError("Invalid API response: results is not an array");
-      }
-
-      yield put(fetchMoviesSuccess(movies));
+      yield put(fetchMoviesRequest());
       return;
     }
 
@@ -125,29 +166,12 @@ function* handleSearch(action: {
       return;
     }
 
-    const response = (yield call(() =>
-      axiosInstance.get(API_ENDPOINTS.SEARCH, { params: { query, page } }),
-    )) as { data?: { results?: unknown[] } };
-
-    const data = response as { data?: { results?: unknown[] } };
-    const movies: Movie[] = data.data?.results as Movie[];
-    if (!Array.isArray(movies)) {
-      throw new TypeError("Invalid API response: results is not an array");
-    }
-
-    yield put(fetchMoviesSuccess(movies));
+    // Fetch search results
+    yield put(fetchMoviesRequest());
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     yield put(fetchMoviesFailure(errorMessage));
   }
-}
-
-function* handleFilterChange() {
-  yield put(fetchMoviesRequest());
-}
-
-function* handlePageChange() {
-  yield put(fetchMoviesRequest());
 }
 
 // Helper function to format error messages

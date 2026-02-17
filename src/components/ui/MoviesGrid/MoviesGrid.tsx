@@ -1,13 +1,17 @@
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import type { Movie } from "../../../features/movies/moviesTypes";
+import type { RootState } from "../../../store/store";
+import {
+  setGlobalFocus,
+  updateFocusIndex,
+} from "../../../features/focus/focusSlice";
 import MovieCard from "../MovieCard";
 import {
   useKeyboardNavigation,
   scrollToElement,
   setActiveComponent,
-  registerNavigationCallback,
-  navigateToComponent,
 } from "../../../hooks/useKeyboardNavigation";
 import "./MoviesGrid.css";
 
@@ -19,17 +23,24 @@ const COLUMNS = 4; // 4 cards per row
 
 const MovieGrid = ({ movies }: Props) => {
   const navigate = useNavigate();
-  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const dispatch = useDispatch();
+  const { section, index: globalFocusIndex } = useSelector(
+    (state: RootState) => state.focus,
+  );
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleGridFocus = () => {
       setActiveComponent("movies-grid");
+      // Focus first card when entering grid with mouse
+      if (section !== "movies-grid") {
+        dispatch(setGlobalFocus({ section: "movies-grid", index: 0 }));
+      }
     };
 
     const handleGridBlur = () => {
-      setActiveComponent(null);
+      // Don't clear active component - let keyboard hook manage it
     };
 
     const grid = gridRef.current;
@@ -38,87 +49,65 @@ const MovieGrid = ({ movies }: Props) => {
       grid.addEventListener("mouseleave", handleGridBlur);
     }
 
-    // Register boundary navigation callback
-    registerNavigationCallback("movies-grid", (direction) => {
-      if (direction === "up") {
-        // Coming from filter bar above, focus first card
-        setFocusedIndex(0);
-        // Scroll to first card after the state updates
-        setTimeout(() => {
-          if (cardRefs.current[0]) {
-            scrollToElement(cardRefs.current[0]);
-          }
-        }, 0);
-      } else if (direction === "down") {
-        // Coming from pagination below, focus last visible row
-        const lastRowStart = Math.max(0, movies.length - COLUMNS);
-        setFocusedIndex(lastRowStart);
-        setTimeout(() => {
-          if (cardRefs.current[lastRowStart]) {
-            scrollToElement(cardRefs.current[lastRowStart]);
-          }
-        }, 0);
-      }
-      // If coming from below (direction="down"), stay at current focus or scroll to last visible
-    });
-
     return () => {
       if (grid) {
         grid.removeEventListener("mouseenter", handleGridFocus);
         grid.removeEventListener("mouseleave", handleGridBlur);
       }
     };
-  }, [movies.length]);
+  }, [section, dispatch]);
 
   useKeyboardNavigation(
     {
       onArrowDown: () => {
         const newIndex =
-          focusedIndex === -1
+          globalFocusIndex === -1
             ? 0
-            : Math.min(movies.length - 1, focusedIndex + COLUMNS);
+            : Math.min(movies.length - 1, globalFocusIndex + COLUMNS);
 
         // Check if already at or past the last row
         const isAtLastRow = newIndex >= movies.length - COLUMNS;
-        if (isAtLastRow && focusedIndex >= movies.length - COLUMNS) {
+        if (isAtLastRow && globalFocusIndex >= movies.length - COLUMNS) {
           // Already at last row, try to navigate to pagination
-          navigateToComponent("pagination", "up");
+          dispatch(setGlobalFocus({ section: "pagination", index: 0 }));
+          setActiveComponent("pagination");
           return;
         }
 
-        setFocusedIndex(newIndex);
+        dispatch(updateFocusIndex(newIndex));
         scrollToElement(cardRefs.current[newIndex]);
       },
       onArrowUp: () => {
         // Detect if trying to go up beyond first row
-        if (focusedIndex !== -1 && focusedIndex < COLUMNS) {
+        if (globalFocusIndex !== -1 && globalFocusIndex < COLUMNS) {
           // At first row, navigate to filter bar
-          navigateToComponent("filter-bar", "down");
+          dispatch(setGlobalFocus({ section: "filter-bar", index: 0 }));
+          setActiveComponent("filter-bar");
           return;
         }
 
         const newIndex =
-          focusedIndex === -1 ? 0 : Math.max(0, focusedIndex - COLUMNS);
-        setFocusedIndex(newIndex);
+          globalFocusIndex === -1 ? 0 : Math.max(0, globalFocusIndex - COLUMNS);
+        dispatch(updateFocusIndex(newIndex));
         scrollToElement(cardRefs.current[newIndex]);
       },
       onArrowRight: () => {
         const newIndex =
-          focusedIndex === -1
+          globalFocusIndex === -1
             ? 0
-            : Math.min(movies.length - 1, focusedIndex + 1);
-        setFocusedIndex(newIndex);
+            : Math.min(movies.length - 1, globalFocusIndex + 1);
+        dispatch(updateFocusIndex(newIndex));
         scrollToElement(cardRefs.current[newIndex]);
       },
       onArrowLeft: () => {
         const newIndex =
-          focusedIndex === -1 ? 0 : Math.max(0, focusedIndex - 1);
-        setFocusedIndex(newIndex);
+          globalFocusIndex === -1 ? 0 : Math.max(0, globalFocusIndex - 1);
+        dispatch(updateFocusIndex(newIndex));
         scrollToElement(cardRefs.current[newIndex]);
       },
       onEnter: () => {
-        if (focusedIndex !== -1 && movies[focusedIndex]) {
-          navigate(`/movie/${movies[focusedIndex].id}`);
+        if (globalFocusIndex !== -1 && movies[globalFocusIndex]) {
+          navigate(`/movie/${movies[globalFocusIndex].id}`);
         }
       },
     },
@@ -131,21 +120,23 @@ const MovieGrid = ({ movies }: Props) => {
       ref={gridRef}
     >
       {movies.length === 0 ? (
-        <div className="movies-grid__empty" role="status" aria-live="polite">
+        <div className="movies-grid__empty">
           <h3 className="movies-grid__empty-title">No movies found</h3>
           <p className="movies-grid__empty-sub">
             Try adjusting your search or filters.
           </p>
         </div>
       ) : (
-        movies.map((movie, index) => (
+        movies.map((movie, cardIndex) => (
           <MovieCard
             key={movie.id}
             movie={movie}
             ref={(el) => {
-              cardRefs.current[index] = el;
+              cardRefs.current[cardIndex] = el;
             }}
-            isFocused={focusedIndex === index}
+            isFocused={
+              section === "movies-grid" && globalFocusIndex === cardIndex
+            }
           />
         ))
       )}

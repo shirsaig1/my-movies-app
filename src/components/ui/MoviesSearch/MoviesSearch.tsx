@@ -1,5 +1,11 @@
-import { useCallback } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useCallback, useEffect, useRef } from "react";
+import { useKeyboardNavigation } from "../../../hooks/useKeyboardNavigation";
+import { setGlobalFocus } from "../../../features/focus/focusSlice";
+import {
+  useDispatch,
+  useSelector,
+  useDispatch as useReduxDispatch,
+} from "react-redux";
 import { setSearchQuery } from "../../../features/movies/moviesSlice";
 import type { RootState } from "../../../store/store";
 import "./MoviesSearch.css";
@@ -8,6 +14,32 @@ const MoviesSearch = () => {
   const dispatch = useDispatch();
   const searchQuery = useSelector(
     (state: RootState) => state.movies.searchQuery,
+  );
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { section } = useSelector((state: RootState) => state.focus);
+  const isFocused = section === "search";
+
+  useEffect(() => {
+    if (isFocused && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isFocused]);
+
+  // Keyboard navigation for search
+  const reduxDispatch = useReduxDispatch();
+  useKeyboardNavigation(
+    {
+      onArrowDown: () => {
+        reduxDispatch(setGlobalFocus({ section: "filter-bar", index: 0 }));
+      },
+      onArrowUp: () => {
+        reduxDispatch(setGlobalFocus({ section: "pagination", index: 0 }));
+      },
+      onEscape: () => {
+        inputRef.current?.blur();
+      },
+    },
+    "search",
   );
 
   const handleSearchChange = useCallback(
@@ -18,7 +50,9 @@ const MoviesSearch = () => {
   );
 
   return (
-    <div className="search-container">
+    <div
+      className={`search-container${isFocused ? " search-container--focused" : ""}`}
+    >
       <svg
         className="search-icon"
         width="16"
@@ -37,12 +71,16 @@ const MoviesSearch = () => {
         />
       </svg>
       <input
+        ref={inputRef}
         type="text"
         value={searchQuery}
         placeholder="Search movies by title (minimum 2 characters)"
         onChange={handleSearchChange}
         aria-label="Search movies"
-        className="search-input"
+        className={`search-input${isFocused ? " search-input--focused" : ""}`}
+        onFocus={() =>
+          reduxDispatch(setGlobalFocus({ section: "search", index: 0 }))
+        }
       />
     </div>
   );

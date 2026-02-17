@@ -1,5 +1,4 @@
 import { useEffect, useCallback, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { fetchMoviesRequest, clearError } from "../features/movies/moviesSlice";
 import MoviesGrid from "../components/ui/MoviesGrid";
 import FilterBar from "../components/ui/FilterBar";
@@ -8,6 +7,12 @@ import Carousel from "../components/ui/Carousel/Carousel";
 import type { RootState } from "../store/store";
 import MoviesSearch from "../components/ui/MoviesSearch";
 import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
+import {
+  useDispatch as useReduxDispatch,
+  useDispatch,
+  useSelector,
+} from "react-redux";
+import { focusPrevious } from "../features/focus/focusSlice";
 import { getAccountDetails } from "../utils/api";
 import "./HomePage.css";
 
@@ -29,9 +34,13 @@ const HomePage = () => {
     window.scrollBy({ top: SCROLL_DISTANCE_PX, behavior: "smooth" });
   }, []);
 
+  const reduxDispatch = useReduxDispatch();
   useKeyboardNavigation({
     onArrowUp: handleScrollUp,
     onArrowDown: handleScrollDown,
+    onEscape: () => {
+      reduxDispatch(focusPrevious());
+    },
   });
 
   // Initial data fetch
