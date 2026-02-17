@@ -1,27 +1,35 @@
-import { useDispatch, useSelector } from "react-redux";
 import { setPage } from "../../../features/movies/moviesSlice";
 import type { RootState } from "../../../store/store";
 import { useState, useRef, useEffect } from "react";
 import {
   useKeyboardNavigation,
   setActiveComponent,
-  registerNavigationCallback,
-  navigateToComponent,
-  scrollToElement,
 } from "../../../hooks/useKeyboardNavigation";
+import {
+  useDispatch as useReduxDispatch,
+  useSelector,
+  useDispatch,
+} from "react-redux";
+import {
+  focusPrevious,
+  updateFocusIndex,
+  setGlobalFocus,
+} from "../../../features/focus/focusSlice";
 import "./Pagination.css";
 
 const MAX_PAGES = 500; // TMDb API typically allows up to 500 pages
+
+const PAGINATION_ITEMS = ["previous", "input", "next"] as const;
 
 export default function Pagination() {
   const dispatch = useDispatch();
   const { page, filter, searchQuery } = useSelector(
     (state: RootState) => state.movies,
   );
+  const { section, index: globalFocusIndex } = useSelector(
+    (state: RootState) => state.focus,
+  );
   const [inputPage, setInputPage] = useState(page.toString());
-  const [focusedControl, setFocusedControl] = useState<
-    "previous" | "input" | "next"
-  >("previous");
   const prevRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
@@ -34,16 +42,25 @@ export default function Pagination() {
 
   useEffect(() => {
     // Scroll to top of grid when page changes
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const grid = document.querySelector(".movies-grid");
+    if (grid && "scrollTo" in grid) {
+      (grid as HTMLElement).scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.scrollTo(0, 0);
+    }
   }, [page]);
 
   useEffect(() => {
     const handlePaginationFocus = () => {
       setActiveComponent("pagination");
+      // Set global focus to pagination (first item by default)
+      if (section !== "pagination") {
+        dispatch(setGlobalFocus({ section: "pagination", index: 0 }));
+      }
     };
 
     const handlePaginationBlur = () => {
-      setActiveComponent(null);
+      // Don't clear active component - let keyboard hook manage it
     };
 
     const pagination = paginationRef.current;
@@ -52,59 +69,77 @@ export default function Pagination() {
       pagination.addEventListener("mouseleave", handlePaginationBlur);
     }
 
-    // Register boundary navigation callback
-    registerNavigationCallback("pagination", (direction) => {
-      if (direction === "up") {
-        // Coming from grid above, focus first control (previous button)
-        setFocusedControl("previous");
-        if (prevRef.current) {
-          scrollToElement(prevRef.current);
-        }
-      }
-      // If coming from below (direction="down"), stay at current focus
-    });
-
     return () => {
       if (pagination) {
         pagination.removeEventListener("mouseenter", handlePaginationFocus);
         pagination.removeEventListener("mouseleave", handlePaginationBlur);
       }
     };
-  }, []);
+  }, [section, dispatch]);
 
   // Call hook before any early returns (React Hooks rule)
+  const reduxDispatch = useReduxDispatch();
   useKeyboardNavigation(
     {
       onArrowLeft: () => {
-        if (focusedControl === "input") {
-          setFocusedControl("previous");
-          prevRef.current?.focus();
-        } else if (focusedControl === "next") {
-          setFocusedControl("input");
-          inputRef.current?.focus();
-        }
+        const newIndex = Math.max(0, globalFocusIndex - 1);
+        dispatch(updateFocusIndex(newIndex));
+        // Scroll to focused element
+        if (newIndex === 0) prevRef.current?.focus();
+        else if (newIndex === 1) inputRef.current?.focus();
+        else if (newIndex === 2) nextRef.current?.focus();
       },
       onArrowRight: () => {
-        if (focusedControl === "previous") {
-          setFocusedControl("input");
-          inputRef.current?.focus();
-        } else if (focusedControl === "input") {
-          setFocusedControl("next");
-          nextRef.current?.focus();
-        }
+        const newIndex = Math.min(
+          PAGINATION_ITEMS.length - 1,
+          globalFocusIndex + 1,
+        );
+        dispatch(updateFocusIndex(newIndex));
+        // Scroll to focused element
+        if (newIndex === 0) prevRef.current?.focus();
+        else if (newIndex === 1) inputRef.current?.focus();
+        else if (newIndex === 2) nextRef.current?.focus();
       },
       onNavigateUp: () => {
-        // Navigate to movies grid when trying to go up beyond pagination
-        navigateToComponent("movies-grid", "down");
+        // Focus the first card in the last row of the grid
+        const grid = document.querySelector(".movies-grid");
+        if (grid) {
+          const cards = grid.querySelectorAll(".movie-card");
+          const COLUMNS = 4;
+          const total = cards.length;
+          const lastRowStart = Math.max(
+            0,
+            Math.floor((total - 1) / COLUMNS) * COLUMNS,
+          );
+          // Set global focus to last row's first card
+          dispatch(
+            setGlobalFocus({ section: "movies-grid", index: lastRowStart }),
+          );
+          setActiveComponent("movies-grid");
+          // Optionally scroll to the card
+          if (cards[lastRowStart] && "scrollIntoView" in cards[lastRowStart]) {
+            (cards[lastRowStart] as HTMLElement).scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+          }
+        } else {
+          // fallback: focus first card
+          dispatch(setGlobalFocus({ section: "movies-grid", index: 0 }));
+          setActiveComponent("movies-grid");
+        }
       },
       onEnter: () => {
-        if (focusedControl === "previous") {
+        if (globalFocusIndex === 0) {
           handlePreviousPage();
-        } else if (focusedControl === "next") {
+        } else if (globalFocusIndex === 2) {
           handleNextPage();
-        } else if (focusedControl === "input") {
+        } else if (globalFocusIndex === 1) {
           handlePageInputSubmit();
         }
+      },
+      onEscape: () => {
+        reduxDispatch(focusPrevious());
       },
     },
     "pagination",
@@ -144,10 +179,12 @@ export default function Pagination() {
     <div className="pagination" ref={paginationRef}>
       <button
         ref={prevRef}
-        onClick={handlePreviousPage}
+        onClick={() => {
+          dispatch(setGlobalFocus({ section: "pagination", index: 0 }));
+          handlePreviousPage();
+        }}
         disabled={page <= 1}
-        className={`pagination__btn ${focusedControl === "previous" ? "pagination__btn--focused" : ""}`}
-        onFocus={() => setFocusedControl("previous")}
+        className={`pagination__btn ${section === "pagination" && globalFocusIndex === 0 ? "pagination__btn--focused" : ""}`}
       >
         Previous
       </button>
@@ -160,18 +197,22 @@ export default function Pagination() {
         onBlur={handlePageInputSubmit}
         min={1}
         max={MAX_PAGES}
-        className={`pagination__input ${focusedControl === "input" ? "pagination__input--focused" : ""}`}
-        onFocus={() => setFocusedControl("input")}
+        className={`pagination__input ${section === "pagination" && globalFocusIndex === 1 ? "pagination__input--focused" : ""}`}
+        onClick={() =>
+          dispatch(setGlobalFocus({ section: "pagination", index: 1 }))
+        }
       />
 
       <span className="pagination__label">of {MAX_PAGES}</span>
 
       <button
         ref={nextRef}
-        onClick={handleNextPage}
+        onClick={() => {
+          dispatch(setGlobalFocus({ section: "pagination", index: 2 }));
+          handleNextPage();
+        }}
         disabled={page >= MAX_PAGES}
-        className={`pagination__btn ${focusedControl === "next" ? "pagination__btn--focused" : ""}`}
-        onFocus={() => setFocusedControl("next")}
+        className={`pagination__btn ${section === "pagination" && globalFocusIndex === 2 ? "pagination__btn--focused" : ""}`}
       >
         Next
       </button>

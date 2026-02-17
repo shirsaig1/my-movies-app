@@ -32,11 +32,3 @@ export interface MoviesState {
   filter: MovieFilter;
   searchQuery: string;
 }
-
-export interface MoviesState {
-  movies: Movie[];
-  isLoading: boolean;
-  page: number;
-  filter: MovieFilter;
-  searchQuery: string;
-}

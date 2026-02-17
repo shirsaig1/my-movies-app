@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   getMovieDetails,
@@ -7,8 +7,14 @@ import {
   isFavorite,
 } from "../utils/api";
 import type { MovieDetails, Movie } from "../features/movies/moviesTypes";
-import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
+import {
+  setActiveComponent,
+  useKeyboardNavigation,
+} from "../hooks/useKeyboardNavigation";
 import "./MovieDetailsPage.css";
+import { useDispatch, useSelector } from "react-redux";
+import { setGlobalFocus, updateFocusIndex } from "../features/focus/focusSlice";
+import type { RootState } from "../store/store";
 
 export default function MovieDetailsPage() {
   const { movieId } = useParams<{ movieId: string }>();
@@ -16,6 +22,11 @@ export default function MovieDetailsPage() {
   const [movie, setMovie] = useState<MovieDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFav, setIsFav] = useState(false);
+  const dispatch = useDispatch();
+  const PAGE_ID = "movie-details";
+  const pageRef = useRef<HTMLDivElement>(null);
+  const { section, index } = useSelector((state: RootState) => state.focus);
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
     const fetchMovieDetails = async () => {
@@ -34,19 +45,60 @@ export default function MovieDetailsPage() {
     if (movieId) {
       fetchMovieDetails();
     }
-  }, [movieId]);
 
-  useKeyboardNavigation({
-    onEscape: () => {
-      navigate("/");
+    // Ensure global focus is set to details on mount
+    dispatch(setGlobalFocus({ section: "details", index: 0 }));
+  }, [movieId, dispatch]);
+
+  useEffect(() => {
+    // Set this page as active when it loads
+    setActiveComponent(PAGE_ID);
+
+    // Cleanup: reset when leaving
+    return () => setActiveComponent(null);
+  }, []);
+
+  useEffect(() => {
+    // Focus the container so it captures keyboard events immediately
+    pageRef.current?.focus();
+  }, [loading]);
+
+  // Focus management for details buttons
+  useEffect(() => {
+    if (section === "details" && buttonRefs.current[index]) {
+      buttonRefs.current[index]?.focus();
+    }
+  }, [section, index, loading]);
+
+  // Keyboard navigation for details page (Back, Add to Favorites)
+  useKeyboardNavigation(
+    {
+      onArrowUp: () => {
+        const newIndex = Math.max(0, index - 1);
+        dispatch(updateFocusIndex(newIndex));
+      },
+      onArrowDown: () => {
+        if (index === 1) {
+          // Already on Add to Favorites, scroll page
+          window.scrollBy({ top: 100, behavior: "smooth" });
+        } else {
+          // Move focus from Back to Add to Favorites
+          dispatch(updateFocusIndex(1));
+        }
+      },
+      onEnter: () => {
+        if (index === 0) {
+          navigate("/");
+        } else if (index === 1) {
+          handleFavoriteToggle();
+        }
+      },
+      onEscape: () => {
+        navigate(`/`);
+      },
     },
-    onArrowUp: () => {
-      window.scrollBy({ top: -100, behavior: "smooth" });
-    },
-    onArrowDown: () => {
-      window.scrollBy({ top: 100, behavior: "smooth" });
-    },
-  });
+    "details",
+  );
 
   const handleFavoriteToggle = () => {
     if (movie) {
@@ -74,7 +126,13 @@ export default function MovieDetailsPage() {
 
   if (!movie) {
     return (
-      <div className="movie-details__container">
+      <div
+        ref={pageRef}
+        tabIndex={-1}
+        className="movie-details__container"
+        style={{ outline: "none" }}
+      >
+        {" "}
         <div className="movie-details__not-found">
           <button className="btn btn-primary" onClick={() => navigate("/")}>
             ⬅️ Back to Movies
@@ -86,8 +144,14 @@ export default function MovieDetailsPage() {
   }
 
   return (
-    <div className="movie-details__container">
-      <button className="btn btn-primary" onClick={() => navigate("/")}>
+    <div className="movie-details__container" ref={pageRef} tabIndex={-1}>
+      <button
+        ref={(el) => {
+          buttonRefs.current[0] = el;
+        }}
+        className={`btn btn-primary${section === "details" && index === 0 ? " details-button--focused" : ""}`}
+        onClick={() => navigate("/")}
+      >
         ⬅️ Back to Movies
       </button>
 
@@ -159,7 +223,10 @@ export default function MovieDetailsPage() {
 
           <div className="movie-details__actions">
             <button
-              className="btn btn-contained"
+              ref={(el) => {
+                buttonRefs.current[1] = el;
+              }}
+              className={`btn btn-contained${section === "details" && index === 1 ? " details-button--focused" : ""}`}
               onClick={handleFavoriteToggle}
             >
               {isFav ? "❤️ Remove from Favorites" : "♡ Add to Favorites"}

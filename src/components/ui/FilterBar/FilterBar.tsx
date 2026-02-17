@@ -1,14 +1,16 @@
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { setFilter } from "../../../features/movies/moviesSlice";
+import {
+  setGlobalFocus,
+  updateFocusIndex,
+} from "../../../features/focus/focusSlice";
 import type { RootState } from "../../../store/store";
 import type { MovieFilter } from "../../../features/movies/moviesTypes";
 import {
   useKeyboardNavigation,
   scrollToElement,
   setActiveComponent,
-  registerNavigationCallback,
-  navigateToComponent,
 } from "../../../hooks/useKeyboardNavigation";
 import "./FilterBar.css";
 
@@ -23,7 +25,7 @@ const FOCUS_DELAY_MS = 2000; // 2 seconds
 export default function FilterBar() {
   const dispatch = useDispatch();
   const currentFilter = useSelector((state: RootState) => state.movies.filter);
-  const [focusedIndex, setFocusedIndex] = useState(0);
+  const { section, index } = useSelector((state: RootState) => state.focus);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterBarRef = useRef<HTMLDivElement>(null);
@@ -31,10 +33,14 @@ export default function FilterBar() {
   useEffect(() => {
     const handleFilterFocus = () => {
       setActiveComponent("filter-bar");
+      // Set global focus only if not already in filter bar
+      if (section !== "filter-bar") {
+        dispatch(setGlobalFocus({ section: "filter-bar", index: 0 }));
+      }
     };
 
     const handleFilterBlur = () => {
-      setActiveComponent(null);
+      // Don't clear active component - let keyboard hook manage it
     };
 
     const filterBar = filterBarRef.current;
@@ -43,31 +49,16 @@ export default function FilterBar() {
       filterBar.addEventListener("mouseleave", handleFilterBlur);
     }
 
-    // Register boundary navigation callback
-    registerNavigationCallback("filter-bar", (direction) => {
-      if (direction === "down") {
-        // Coming from grid below, focus filter bar (already focused)
-        const firstButton = buttonRefs.current[0];
-        if (firstButton) {
-          scrollToElement(firstButton);
-        }
-      }
-      // If coming from above (direction="up"), stay at current focus
-    });
-
     return () => {
       if (filterBar) {
         filterBar.removeEventListener("mouseenter", handleFilterFocus);
         filterBar.removeEventListener("mouseleave", handleFilterBlur);
       }
     };
-  }, []);
+  }, [section, dispatch]);
 
   const handleFilterChange = (filter: MovieFilter) => {
-    if (focusTimeoutRef.current) {
-      clearTimeout(focusTimeoutRef.current);
-      focusTimeoutRef.current = null;
-    }
+    // Immediate dispatch when clicked or Enter pressed
     dispatch(setFilter(filter));
   };
 
@@ -75,47 +66,76 @@ export default function FilterBar() {
     (opt) => opt.value === currentFilter,
   );
 
+  // Sync global focus index when filter changes (e.g., from Redux action)
   useEffect(() => {
-    setFocusedIndex(currentFilterIndex);
-  }, [currentFilterIndex]);
+    if (section === "filter-bar") {
+      dispatch(updateFocusIndex(currentFilterIndex));
+    }
+  }, [currentFilterIndex, section, dispatch]);
 
-  const handleFilterFocus = (index: number) => {
+  // Only trigger 2s readout when focus is via keyboard navigation
+  const handleFilterFocus = (filterIndex: number, fromKeyboard = false) => {
+    if (!fromKeyboard) return;
     if (focusTimeoutRef.current) {
       clearTimeout(focusTimeoutRef.current);
     }
     focusTimeoutRef.current = setTimeout(() => {
-      dispatch(setFilter(FILTER_OPTIONS[index].value));
+      dispatch(setFilter(FILTER_OPTIONS[filterIndex].value));
       focusTimeoutRef.current = null;
     }, FOCUS_DELAY_MS);
   };
 
+  // When keyboard focus leaves a button, cancel pending timeout
+  const handleFilterBlur = () => {
+    if (focusTimeoutRef.current) {
+      clearTimeout(focusTimeoutRef.current);
+      focusTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    // Cleanup timeout on unmount
+    return () => {
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useKeyboardNavigation(
     {
       onArrowLeft: () => {
-        const newIndex = Math.max(0, focusedIndex - 1);
-        setFocusedIndex(newIndex);
+        const newIndex = Math.max(0, index - 1);
+        dispatch(updateFocusIndex(newIndex));
         scrollToElement(buttonRefs.current[newIndex]);
-        handleFilterFocus(newIndex);
+        handleFilterFocus(newIndex, true);
       },
       onArrowRight: () => {
-        const newIndex = Math.min(FILTER_OPTIONS.length - 1, focusedIndex + 1);
-        setFocusedIndex(newIndex);
+        const newIndex = Math.min(FILTER_OPTIONS.length - 1, index + 1);
+        dispatch(updateFocusIndex(newIndex));
         scrollToElement(buttonRefs.current[newIndex]);
-        handleFilterFocus(newIndex);
+        handleFilterFocus(newIndex, true);
       },
       onNavigateDown: () => {
-        // Navigate to movies grid when trying to go down beyond filter bar
-        navigateToComponent("movies-grid", "up");
+        // Always move focus to grid on ArrowDown, even on first render
+        dispatch(setGlobalFocus({ section: "movies-grid", index: 0 }));
+        setActiveComponent("movies-grid");
+        // Optionally, scroll grid into view for accessibility
+        const grid = document.querySelector(".movies-grid");
+        if (grid && "scrollIntoView" in grid) {
+          (grid as HTMLElement).scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
       },
       onNavigateUp: () => {
         // Stay in filter bar - it's the top boundary
       },
       onEnter: () => {
-        if (focusTimeoutRef.current) {
-          clearTimeout(focusTimeoutRef.current);
-          focusTimeoutRef.current = null;
-        }
-        handleFilterChange(FILTER_OPTIONS[focusedIndex].value);
+        // ✅ FIX: On Enter key, cancel pending focus timeout and dispatch immediately
+        handleFilterBlur(); // Cancel pending timeout
+        handleFilterChange(FILTER_OPTIONS[index].value); // Dispatch immediately
       },
     },
     "filter-bar",
@@ -193,18 +213,34 @@ export default function FilterBar() {
 
   return (
     <div className="filter-bar" ref={filterBarRef}>
-      {FILTER_OPTIONS.map((option, index) => (
+      {FILTER_OPTIONS.map((option, buttonIndex) => (
         <button
           key={option.value}
           ref={(el) => {
-            buttonRefs.current[index] = el;
+            buttonRefs.current[buttonIndex] = el;
           }}
-          onClick={() => handleFilterChange(option.value)}
+          onClick={() => {
+            handleFilterBlur(); // Cancel pending timeout
+            handleFilterChange(option.value);
+            dispatch(
+              setGlobalFocus({ section: "filter-bar", index: buttonIndex }),
+            );
+          }}
+          onFocus={(e) => {
+            // Only trigger 2s readout if focus is from keyboard
+            if (
+              e &&
+              e.relatedTarget &&
+              (e.relatedTarget as HTMLElement)?.tagName !== "BUTTON"
+            )
+              return;
+            handleFilterFocus(buttonIndex, true);
+          }}
           className={`filter-button ${
-            focusedIndex === index || currentFilter === option.value
+            currentFilter === option.value
               ? "filter-button--active"
               : "filter-button--outlined"
-          } ${focusedIndex === index ? "filter-button--focused" : ""}`}
+          } ${section === "filter-bar" && index === buttonIndex ? "filter-button--focused" : ""}`}
         >
           <span className="filter-button__icon" aria-hidden>
             {renderIcon(option.value)}

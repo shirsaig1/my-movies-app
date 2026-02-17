@@ -1,3 +1,7 @@
+.details-button--focused {
+  outline: 2px solid blue;
+  outline-offset: 2px;
+}
 .loading-container {
   display: flex;
   justify-content: center;

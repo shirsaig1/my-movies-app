@@ -19,68 +19,66 @@ export const useKeyboardNavigation = (
   options: KeyboardNavigationOptions,
   componentId?: string,
 ) => {
-  const componentRef = useRef<string>(componentId || "");
+  const optionsRef = useRef(options);
 
   useEffect(() => {
-    if (!componentRef.current && !componentId) {
-      componentRef.current = `nav-${Symbol.for("nav").toString()}`;
-    }
-    if (componentId) {
-      componentRef.current = componentId;
-    }
+    optionsRef.current = options;
+  }, [options]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // If a specific component ID is provided, only handle if this component is active
-      if (componentRef.current && activeComponentId !== componentRef.current) {
+      // 1. Global Escape: always works
+      if (event.key === "Escape") {
+        event.preventDefault();
+        optionsRef.current.onEscape?.();
         return;
       }
-
-      // Prevent Tab key from doing anything
+      // 2. Tab prevention (always)
       if (event.key === "Tab") {
         event.preventDefault();
         return;
       }
-
+      // 3. Scoped navigation: only if no componentId, or matches activeComponentId
+      if (componentId && activeComponentId !== componentId) {
+        return;
+      }
+      // 4. Arrow/Enter logic (always use latest optionsRef)
       switch (event.key) {
         case "ArrowUp":
           event.preventDefault();
-          if (options.onArrowUp) {
-            options.onArrowUp();
-          } else if (options.onNavigateUp) {
-            options.onNavigateUp();
+          if (optionsRef.current.onArrowUp) {
+            optionsRef.current.onArrowUp();
+          } else if (optionsRef.current.onNavigateUp) {
+            optionsRef.current.onNavigateUp();
           }
           break;
         case "ArrowDown":
           event.preventDefault();
-          if (options.onArrowDown) {
-            options.onArrowDown();
-          } else if (options.onNavigateDown) {
-            options.onNavigateDown();
+          if (optionsRef.current.onArrowDown) {
+            optionsRef.current.onArrowDown();
+          } else if (optionsRef.current.onNavigateDown) {
+            optionsRef.current.onNavigateDown();
           }
           break;
         case "ArrowLeft":
           event.preventDefault();
-          options.onArrowLeft?.();
+          optionsRef.current.onArrowLeft?.();
           break;
         case "ArrowRight":
           event.preventDefault();
-          options.onArrowRight?.();
+          optionsRef.current.onArrowRight?.();
           break;
         case "Enter":
           event.preventDefault();
-          options.onEnter?.();
-          break;
-        case "Escape":
-          event.preventDefault();
-          options.onEscape?.();
+          optionsRef.current.onEnter?.();
           break;
         default:
           break;
       }
     };
-
     globalThis.addEventListener("keydown", handleKeyDown);
     return () => globalThis.removeEventListener("keydown", handleKeyDown);
-  }, [options, componentId]);
+  }, [componentId]);
 };
 
 export const setActiveComponent = (componentId: string | null) => {
